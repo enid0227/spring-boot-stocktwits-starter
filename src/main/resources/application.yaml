@@ -1,0 +1,54 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: DEBUG
+      springframework:
+        security: DEBUG
+spring:
+  # database config. read values from environment variables
+  datasource:
+    url: ${APP_DATASOURCE_URL}
+    username: ${APP_DATASOURCE_USERNAME}
+    password: ${APP_DATASOURCE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    # The SQL dialect makes Hibernate generate better SQL for the chosen database
+    # From MySQL55Dialect onwards, the InnoDB storage engine is used by default.
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL5Dialect
+  sql:
+    init:
+      mode: always
+  # OAuth config for stocktwits api
+  security:
+    oauth2:
+      client:
+        registration:
+          # see: https://docs.spring.io/spring-boot/docs/current/api/org/springframework/boot/autoconfigure/security/oauth2/client/OAuth2ClientProperties.Registration.html
+          stocktwits:
+            client-id: <insert-your-app-client-id>
+            client-secret: <insert-your-app-client-secret>
+            client-authentication-method: post
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope:
+              - read
+              - watch_lists
+              - follow_stocks
+              - follow_users
+
+        provider:
+          # see: https://docs.spring.io/spring-boot/docs/current/api/org/springframework/boot/autoconfigure/security/oauth2/client/OAuth2ClientProperties.Provider.html
+          stocktwits:
+            token-uri: https://api.stocktwits.com/api/2/oauth/token
+            authorization-uri: https://api.stocktwits.com/api/2/oauth/authorize
+            user-name-attribute: user
+            user-info-uri: https://api.stocktwits.com/api/2/account/verify.json

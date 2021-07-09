@@ -1,0 +1,124 @@
+# Persistent Volume for MySQL
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv
+  labels:
+    type: local
+    app: demo-app
+spec:
+  # Storage resource class. Used by the claim (which pool to request resource from)
+  storageClassName: standard
+  capacity:
+    storage: 250Mi
+  accessModes:
+    # ReadWriteOnce -- the volume can be mounted as read-write by a single node
+    # ReadOnlyMany -- the volume can be mounted read-only by many nodes
+    # ReadWriteMany -- the volume can be mounted as read-write by many nodes
+    - ReadWriteOnce
+  hostPath: # hostPath PersistentVolume is used for development and testing only
+    #path: "/mnt/webappdata"
+    path: "/home/docker/demotmpdata"
+  # Retain the PersistentVolume even after the claim is deleted. The volume is considered released.
+  # However, it is not available for any other claims because the previous claimant’s data remains
+  # on the persistent volume.
+  persistentVolumeReclaimPolicy: Retain
+---
+# Persistent Volume Claim for MySQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  labels:
+    app: demo-app
+spec:
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 250Mi
+---
+# MySQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-app-mysql-service
+  labels:
+    app: demo-app
+spec:
+  ports:
+    - port: 3306
+      protocol: TCP
+      # expose this port for local dev server that is not running on minikube deployment
+      # eg. `./mvnw spring-boot:run` on development
+      # port exposed on the minikube host ip
+      nodePort: 32322
+  type: NodePort
+  selector:
+    app: demo-app
+    tier: mysql
+---
+# Deployment for MySQL Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app-mysql-deployment
+  labels:
+    app: demo-app-mysql
+spec:
+  selector:
+    # deployment applies to the pod with the matched labels
+    matchLabels:
+      app: demo-app
+      tier: mysql
+  strategy:
+    type: Recreate
+  # Template for the Pod
+  template:
+    metadata:
+      # Labels to be applied to the Pods in this deployment
+      labels:
+        app: demo-app
+        tier: mysql
+    # Pod container spec
+    spec:
+      containers:
+        - image: mysql:5.6
+          name: mysql
+          # Environment variables passed to the container
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              # Read environment variables from kubernetes secrets
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-root-pass
+                  key: password
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-db-url
+                  key: database
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-user-pass
+                  key: username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-user-pass
+                  key: password
+          ports:
+            # The port that the mysql container exposes
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            # This name should match the `volumes.name` below
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql
+      # A PersistentVolume is mounted as a volume to the Pod
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim:
+            claimName: mysql-pv-claim
